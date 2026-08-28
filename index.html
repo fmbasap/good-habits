@@ -117,31 +117,6 @@
     cursor: pointer; opacity: 0.6;
   }
   .error-msg { color: #A67C7C; font-size: 13px; margin-bottom: 16px; }
-
-  .tab-row { display: flex; gap: 8px; margin-bottom: 20px; }
-  .tab-btn {
-    padding: 8px 18px; border-radius: 999px; border: 1px solid #DCE0D4;
-    background: #FFFFFF; cursor: pointer; font-size: 13px; font-weight: 600;
-    color: #7C9885; font-family: 'Work Sans', sans-serif;
-  }
-  .tab-btn.active { background: #5B8C5A; border-color: #5B8C5A; color: #fff; }
-
-  .leaderboard-list { display: flex; flex-direction: column; gap: 8px; }
-  .lb-row {
-    display: flex; align-items: center; gap: 12px;
-    background: #fff; border: 1px solid #E5E8DE; border-radius: 12px;
-    padding: 12px 16px;
-  }
-  .lb-row.me { border-color: #5B8C5A; background: #F4F8F3; }
-  .lb-rank {
-    font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 14px;
-    color: #7C9885; width: 28px; text-align: center; flex-shrink: 0;
-  }
-  .lb-name { flex: 1; font-weight: 600; font-size: 14px; }
-  .lb-leaves {
-    font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #5B8C5A;
-    font-weight: 600;
-  }
 </style>
 </head>
 <body>
@@ -154,28 +129,17 @@
 
     <div id="auth-area"></div>
     <div id="app-area" style="display:none;">
-      <div class="tab-row">
-        <button class="tab-btn active" id="tab-garden" type="button">내 정원</button>
-        <button class="tab-btn" id="tab-leaderboard" type="button">랭킹보드</button>
+      <div class="add-row">
+        <input id="habit-input" placeholder="새로운 습관 (예: 물 마시기, 10분 산책)" />
+        <button id="add-btn">심기</button>
       </div>
 
-      <div id="garden-view">
-        <div class="add-row">
-          <input id="habit-input" placeholder="새로운 습관 (예: 물 마시기, 10분 산책)" />
-          <button id="add-btn">심기</button>
-        </div>
-
-        <div class="backup-row">
-          <button id="export-btn" type="button">백업 내려받기</button>
-        </div>
-
-        <p id="error-msg" class="error-msg" style="display:none;"></p>
-        <div id="content"></div>
+      <div class="backup-row">
+        <button id="export-btn" type="button">백업 내려받기</button>
       </div>
 
-      <div id="leaderboard-view" style="display:none;">
-        <div id="leaderboard-content"></div>
-      </div>
+      <p id="error-msg" class="error-msg" style="display:none;"></p>
+      <div id="content"></div>
     </div>
   </div>
 
@@ -229,19 +193,14 @@ function showError(msg) {
 function plantSVG(total, accent) {
   const stage = total === 0 ? 0 : total < 7 ? 1 : total < 30 ? 2 : total < 60 ? 3 : 4;
   const stemHeight = Math.min(10 + total * 2.2, 130);
-  const leafCount = Math.min(Math.floor(total / 3), 30);
+  const leafCount = Math.min(Math.floor(total / 3), 12);
   let leavesSVG = "";
   for (let i = 0; i < leafCount; i++) {
     const t = (i + 1) / (leafCount + 1);
     const y = 148 - t * stemHeight;
     const side = i % 2 === 0 ? 1 : -1;
     const cx = 36 + side * 10;
-    const leafNumber = i + 1;
-    const isMilestone = leafNumber % 10 === 0;
-    const fill = isMilestone ? "#C1440E" : accent;
-    const opacity = isMilestone ? 0.95 : 0.75;
-    const stroke = isMilestone ? `stroke="#8C3009" stroke-width="0.75"` : "";
-    leavesSVG += `<ellipse cx="${cx}" cy="${y}" rx="9" ry="4.5" fill="${fill}" opacity="${opacity}" ${stroke} transform="rotate(${side*30} ${cx} ${y})" />`;
+    leavesSVG += `<ellipse cx="${cx}" cy="${y}" rx="9" ry="4.5" fill="${accent}" opacity="0.75" transform="rotate(${side*30} ${cx} ${y})" />`;
   }
   let body;
   if (stage === 0) {
@@ -386,57 +345,6 @@ function render() {
       </div>`;
   }).join("")}</div>`;
 }
-
-// ---------- leaderboard ----------
-async function loadLeaderboard() {
-  const el = document.getElementById("leaderboard-content");
-  el.innerHTML = `<p style="color:#7C9885;">불러오는 중…</p>`;
-  const { data, error } = await supabaseClient
-    .from("leaderboard")
-    .select("*")
-    .order("total_leaves", { ascending: false })
-    .limit(50);
-  if (error) {
-    el.innerHTML = `<p class="error-msg">랭킹을 불러오지 못했어요: ${escapeHTML(error.message)}</p>`;
-    return;
-  }
-  if (!data || data.length === 0) {
-    el.innerHTML = `<p style="color:#7C9885;">아직 랭킹에 표시할 데이터가 없어요.</p>`;
-    return;
-  }
-  const medals = ["🥇", "🥈", "🥉"];
-  el.innerHTML = `<div class="leaderboard-list">${data.map((row, i) => {
-    const isMe = currentUser && row.user_id === currentUser.id;
-    return `
-      <div class="lb-row ${isMe ? "me" : ""}">
-        <div class="lb-rank">${medals[i] || i + 1}</div>
-        <div class="lb-name">${escapeHTML(row.display_name)}${isMe ? " (나)" : ""}</div>
-        <div class="lb-leaves">🌿 ${row.total_leaves}</div>
-      </div>`;
-  }).join("")}</div>`;
-}
-
-function switchTab(tab) {
-  const gardenBtn = document.getElementById("tab-garden");
-  const lbBtn = document.getElementById("tab-leaderboard");
-  const gardenView = document.getElementById("garden-view");
-  const lbView = document.getElementById("leaderboard-view");
-  if (tab === "garden") {
-    gardenBtn.classList.add("active");
-    lbBtn.classList.remove("active");
-    gardenView.style.display = "";
-    lbView.style.display = "none";
-  } else {
-    gardenBtn.classList.remove("active");
-    lbBtn.classList.add("active");
-    gardenView.style.display = "none";
-    lbView.style.display = "";
-    loadLeaderboard();
-  }
-}
-
-document.getElementById("tab-garden").addEventListener("click", () => switchTab("garden"));
-document.getElementById("tab-leaderboard").addEventListener("click", () => switchTab("leaderboard"));
 
 document.getElementById("add-btn").addEventListener("click", addHabit);
 document.getElementById("habit-input").addEventListener("keydown", (e) => {
