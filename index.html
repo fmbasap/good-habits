@@ -181,8 +181,8 @@
 
 <script>
 // ---------- ⚠️ 여기 두 값만 채워주세요 (Supabase 프로젝트 설정에서 복사) ----------
-const SUPABASE_URL = "https://axnehibmbilvbpkmgnrj.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4bmVoaWJtYmlsdmJwa21nbnJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc4NzY1OTgsImV4cCI6MjEwMzQ1MjU5OH0.5ALx1gASL0BqC3F1CEw8jTgJ0QMB8k02Ms9oMiehH24";
+const SUPABASE_URL = "YOUR_SUPABASE_URL";
+const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
 // -----------------------------------------------------------------------------
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -226,37 +226,138 @@ function showError(msg) {
 }
 
 // ---------- plant visual ----------
-function leafShape(leafNumber, cx, cy, rotate, accent) {
+function shadeColor(hex, percent) {
+  const num = parseInt(hex.replace("#", ""), 16);
+  let r = (num >> 16) + Math.round(2.55 * percent);
+  let g = ((num >> 8) & 0x00ff) + Math.round(2.55 * percent);
+  let b = (num & 0x0000ff) + Math.round(2.55 * percent);
+  r = Math.max(Math.min(255, r), 0);
+  g = Math.max(Math.min(255, g), 0);
+  b = Math.max(Math.min(255, b), 0);
+  return "#" + (0x1000000 + r * 0x10000 + g * 0x100 + b).toString(16).slice(1);
+}
+
+function sparkleShape(size, fill, opacity, stroke, strokeWidth) {
+  const s = `M 0 ${-size} C ${size * 0.28} ${-size * 0.28} ${size * 0.28} ${-size * 0.28} ${size} 0 C ${size * 0.28} ${size * 0.28} ${size * 0.28} ${size * 0.28} 0 ${size} C ${-size * 0.28} ${size * 0.28} ${-size * 0.28} ${size * 0.28} ${-size} 0 C ${-size * 0.28} ${-size * 0.28} ${-size * 0.28} ${-size * 0.28} 0 ${-size} Z`;
+  const strokeAttr = stroke ? `stroke="${stroke}" stroke-width="${strokeWidth || 0.4}"` : "";
+  return `<path d="${s}" fill="${fill}" opacity="${opacity || 1}" ${strokeAttr} />`;
+}
+
+function blobPath(cx, cy, baseR, points, seed) {
+  const pts = [];
+  for (let i = 0; i < points; i++) {
+    const angle = (i / points) * Math.PI * 2;
+    const noise = 0.76 + (Math.sin(seed + i * 2.4) * 0.5 + 0.5) * 0.44;
+    const r = baseR * noise;
+    pts.push([cx + Math.cos(angle) * r, cy + Math.sin(angle) * r * 0.62]);
+  }
+  let d = `M ${(pts[0][0] + pts[points - 1][0]) / 2} ${(pts[0][1] + pts[points - 1][1]) / 2} `;
+  for (let i = 0; i < points; i++) {
+    const next = pts[(i + 1) % points];
+    const midX = (pts[i][0] + next[0]) / 2;
+    const midY = (pts[i][1] + next[1]) / 2;
+    d += `Q ${pts[i][0]} ${pts[i][1]} ${midX} ${midY} `;
+  }
+  return d + "Z";
+}
+
+function leafShape(leafNumber, cx, cy, rotate, accent, uid) {
   const isMilestone = leafNumber % 10 === 0;
   const isFancy = !isMilestone && leafNumber % 5 === 0;
+
   if (isMilestone) {
-    return `<g transform="rotate(${rotate} ${cx} ${cy})">
-      <ellipse cx="${cx}" cy="${cy}" rx="9.5" ry="5" fill="#C1440E" stroke="#8C3009" stroke-width="0.75" opacity="0.95" />
+    const petals = [0, 72, 144, 216, 288]
+      .map((a) => `<ellipse cx="0" cy="-4.5" rx="2.6" ry="4" fill="url(#red-${uid})" transform="rotate(${a})" />`)
+      .join("");
+    return `<g transform="translate(${cx} ${cy}) rotate(${rotate})" filter="url(#shadow-${uid})">
+      ${petals}
+      ${sparkleShape(2.1, "#FBE9E4", 1, "#8C3009", 0.4)}
     </g>`;
   }
   if (isFancy) {
-    // small gold blossom instead of a plain leaf
-    return `<g transform="rotate(${rotate} ${cx} ${cy})">
-      <ellipse cx="${cx-3}" cy="${cy}" rx="5" ry="3.2" fill="#E0A458" opacity="0.9" />
-      <ellipse cx="${cx+3}" cy="${cy}" rx="5" ry="3.2" fill="#E0A458" opacity="0.9" />
-      <circle cx="${cx}" cy="${cy}" r="2.6" fill="#F6F3EC" />
+    const petals = [0, 72, 144, 216, 288]
+      .map((a) => `<ellipse cx="0" cy="-4.5" rx="2.6" ry="4" fill="url(#gold-${uid})" transform="rotate(${a})" />`)
+      .join("");
+    return `<g transform="translate(${cx} ${cy}) rotate(${rotate})" filter="url(#shadow-${uid})">
+      ${petals}
+      ${sparkleShape(2.1, "#FFF7E6", 1, "#C98A2E", 0.4)}
     </g>`;
   }
-  return `<ellipse cx="${cx}" cy="${cy}" rx="9" ry="4.5" fill="${accent}" opacity="0.75" transform="rotate(${rotate} ${cx} ${cy})" />`;
+  return `<g transform="translate(${cx} ${cy}) rotate(${rotate})">
+    <path d="M 0 -9 C 6 -6 6 5 0 8 C -6 5 -6 -6 0 -9 Z" fill="${accent}" opacity="0.8" />
+    <line x1="0" y1="-7" x2="0" y2="6" stroke="${shadeColor(accent, -18)}" stroke-width="0.6" opacity="0.6" />
+  </g>`;
+}
+
+function getTrunkStyle(leavesEarned, accent) {
+  if (leavesEarned >= 650) {
+    const count = Math.min(Math.floor((leavesEarned - 650) / 50) + 1, 8);
+    return { stops: ["#0D3A52", "#1F7A9E", "#8FE0F5"], glow: true, decoration: "star", starGrad: "red", count };
+  }
+  if (leavesEarned >= 450) {
+    const count = Math.min(Math.floor((leavesEarned - 450) / 50) + 1, 4);
+    return { stops: ["#1B5E82", "#4FB8E0", "#BFE9FA"], glow: true, decoration: "star", starGrad: "gold", count };
+  }
+  if (leavesEarned >= 400) {
+    return { stops: ["#1B5E82", "#4FB8E0", "#BFE9FA"], glow: true, decoration: null, count: 0 };
+  }
+  if (leavesEarned >= 150) {
+    const count = Math.min(Math.floor((leavesEarned - 150) / 50) + 1, 4);
+    return { stops: ["#7A1E1E", "#C0392B", "#E8776A"], glow: false, decoration: "stripe", count };
+  }
+  if (leavesEarned >= 100) {
+    return { stops: ["#7A1E1E", "#C0392B", "#E8776A"], glow: false, decoration: null, count: 0 };
+  }
+  if (leavesEarned >= 50) {
+    return { stops: ["#B8860B", "#F2C94C", "#FFF3B0"], glow: false, decoration: null, count: 0 };
+  }
+  return { stops: [shadeColor(accent, -25), accent, shadeColor(accent, 12)], glow: false, decoration: null, count: 0 };
 }
 
 function plantSVG(total, accent) {
-  const soil = `<ellipse cx="36" cy="152" rx="26" ry="6" fill="#B08968" opacity="0.35" />`;
+  const uid = accent.replace("#", "") + "-" + total;
   const leavesEarned = Math.floor(total / 3); // "나뭇잎 개수"
+  const trunkStyle = getTrunkStyle(leavesEarned, accent);
+  const defs = `<defs>
+    <radialGradient id="gold-${uid}" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#FFF3D6" />
+      <stop offset="55%" stop-color="#E0A458" />
+      <stop offset="100%" stop-color="#C98A2E" />
+    </radialGradient>
+    <radialGradient id="red-${uid}" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#FBD9D3" />
+      <stop offset="55%" stop-color="#D9552B" />
+      <stop offset="100%" stop-color="#8C3009" />
+    </radialGradient>
+    <linearGradient id="trunk-${uid}" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="${trunkStyle.stops[0]}" />
+      <stop offset="45%" stop-color="${trunkStyle.stops[1]}" />
+      <stop offset="100%" stop-color="${trunkStyle.stops[2]}" />
+    </linearGradient>
+    <filter id="shadow-${uid}" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="1" stdDeviation="0.8" flood-color="#263228" flood-opacity="0.25" />
+    </filter>
+    <filter id="glow-${uid}" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="2.2" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>`;
+  const soil = `<ellipse cx="36" cy="153" rx="27" ry="6" fill="#8C6239" opacity="0.28" />
+    <ellipse cx="36" cy="151" rx="24" ry="5" fill="#B08968" opacity="0.4" />`;
+
   if (leavesEarned === 0) {
     return `<svg width="72" height="160" viewBox="0 0 72 160" aria-hidden="true">
-      ${soil}<circle cx="36" cy="146" r="3.5" fill="#B08968" /></svg>`;
+      ${defs}${soil}<path d="M 36 143 C 38.5 144 39.5 147 36 150 C 32.5 147 33.5 144 36 143 Z" fill="#B08968" /></svg>`;
   }
 
   const thicknessTier = Math.min(Math.floor(leavesEarned / 10), 6);
-  const trunkWidth = 3 + thicknessTier * 1.2; // thickens every 10 leaves
-  const rawTier = Math.floor(leavesEarned / 20); // evolves every 20 leaves
-  const shapeTier = Math.min(rawTier, 2); // 0 sapling, 1 young tree, 2 elegant tree
+  const trunkWidth = 6 + thicknessTier * 2;
+  const rawTier = Math.floor(leavesEarned / 20);
+  const shapeTier = Math.min(rawTier, 2);
   const stemHeight = Math.min(10 + total * 2.2, 130);
 
   if (shapeTier === 0) {
@@ -266,11 +367,11 @@ function plantSVG(total, accent) {
       const t = (i + 1) / (drawCount + 1);
       const y = 148 - t * stemHeight;
       const side = i % 2 === 0 ? 1 : -1;
-      leaves += leafShape(i + 1, 36 + side * 10, y, side * 30, accent);
+      leaves += leafShape(i + 1, 36 + side * 10, y, side * 30, accent, uid);
     }
     return `<svg width="72" height="160" viewBox="0 0 72 160" aria-hidden="true">
-      ${soil}
-      <line x1="36" y1="150" x2="36" y2="${150 - stemHeight}" stroke="${accent}" stroke-width="${trunkWidth}" stroke-linecap="round" />
+      ${defs}${soil}
+      <line x1="36" y1="150" x2="36" y2="${150 - stemHeight}" stroke="url(#trunk-${uid})" stroke-width="${trunkWidth}" stroke-linecap="round" />
       ${leaves}
     </svg>`;
   }
@@ -285,44 +386,88 @@ function plantSVG(total, accent) {
       const left = i % 2 === 0;
       const t = (Math.floor(i / 2) + 1) / (Math.ceil(drawCount / 2) + 1);
       const bx = left ? 36 - 22 * t : 36 + 22 * t;
-      const by = (150 - trunkHeight) - branchLen * t * 0.7;
-      leaves += leafShape(21 + i, bx, by, left ? -25 : 25, accent);
+      const by = 150 - trunkHeight - branchLen * t * 0.7;
+      leaves += leafShape(21 + i, bx, by, left ? -25 : 25, accent, uid);
     }
     return `<svg width="72" height="160" viewBox="0 0 72 160" aria-hidden="true">
-      ${soil}
-      <line x1="36" y1="150" x2="36" y2="${150 - trunkHeight}" stroke="${accent}" stroke-width="${trunkWidth}" stroke-linecap="round" />
-      <line x1="36" y1="${150 - trunkHeight}" x2="${36 - 22}" y2="${150 - trunkHeight - branchLen * 0.7}" stroke="${accent}" stroke-width="${trunkWidth * 0.65}" stroke-linecap="round" />
-      <line x1="36" y1="${150 - trunkHeight}" x2="${36 + 22}" y2="${150 - trunkHeight - branchLen * 0.7}" stroke="${accent}" stroke-width="${trunkWidth * 0.65}" stroke-linecap="round" />
+      ${defs}${soil}
+      <line x1="36" y1="150" x2="36" y2="${150 - trunkHeight}" stroke="url(#trunk-${uid})" stroke-width="${trunkWidth}" stroke-linecap="round" />
+      <line x1="36" y1="${150 - trunkHeight}" x2="${36 - 22}" y2="${150 - trunkHeight - branchLen * 0.7}" stroke="url(#trunk-${uid})" stroke-width="${trunkWidth * 0.65}" stroke-linecap="round" />
+      <line x1="36" y1="${150 - trunkHeight}" x2="${36 + 22}" y2="${150 - trunkHeight - branchLen * 0.7}" stroke="url(#trunk-${uid})" stroke-width="${trunkWidth * 0.65}" stroke-linecap="round" />
       ${leaves}
     </svg>`;
   }
 
-  // shapeTier === 2: elegant, fuller tree — keeps getting a bit richer every 20 leaves beyond this
-  const luxuryLevel = rawTier - 1; // 0 at the threshold, grows further afterward
+  // shapeTier === 2: elegant, layered tree — keeps getting richer every 20 leaves beyond this
+  const luxuryLevel = rawTier - 1;
   const trunkHeight = 58;
-  const canopyR = 24 + Math.min(luxuryLevel, 4) * 2;
+  const canopyR = Math.min(20 + luxuryLevel * 3, 34);
+  const cy0 = 150 - trunkHeight - 18;
   const drawCount = Math.min(leavesEarned - 40, 20);
   const flourishCount = 1 + Math.min(luxuryLevel, 4);
+
   let leaves = "";
   for (let i = 0; i < Math.max(drawCount, 0); i++) {
     const angle = (i / Math.max(drawCount, 1)) * Math.PI * 2;
-    const r = 15 + (i % 3) * 4;
+    const r = 14 + (i % 3) * 4;
     const cx = 36 + Math.cos(angle) * r;
-    const cy = (150 - trunkHeight - 18) + Math.sin(angle) * r * 0.55;
-    leaves += leafShape(41 + i, cx, cy, (i * 40) % 360, accent);
+    const cy = cy0 + Math.sin(angle) * r * 0.55;
+    leaves += leafShape(41 + i, cx, cy, (i * 40) % 360, accent, uid);
   }
   let flourishes = "";
   for (let f = 0; f < flourishCount; f++) {
     const fa = (f / flourishCount) * Math.PI * 2;
-    const fx = 36 + Math.cos(fa) * (canopyR - 6);
-    const fy = (150 - trunkHeight - 20) + Math.sin(fa) * (canopyR - 6) * 0.5;
-    flourishes += `<g transform="translate(${fx} ${fy})"><circle r="4.5" fill="#E0A458" /><circle r="1.8" fill="#F6F3EC" /></g>`;
+    const fx = 36 + Math.cos(fa) * (canopyR - 4);
+    const fy = cy0 + Math.sin(fa) * (canopyR - 4) * 0.5;
+    flourishes += `<g transform="translate(${fx} ${fy})" filter="url(#shadow-${uid})">
+      ${sparkleShape(4.2, `url(#gold-${uid})`)}
+      ${sparkleShape(1.6, "#FFF7E6")}
+    </g>`;
   }
+  const baseFlare = trunkWidth * 1.25;
+  const midWidth = trunkWidth * 0.85;
+  const topWidth = trunkWidth * 0.6;
+  const yTop = 150 - trunkHeight;
+  const yMid1 = 150 - trunkHeight * 0.15;
+  const yMid2 = 150 - trunkHeight * 0.35;
+  const yMid3 = 150 - trunkHeight * 0.6;
+  const yMid4 = 150 - trunkHeight * 0.8;
+  const trunkPath = `M ${36 - baseFlare} 150
+    C ${36 - baseFlare} ${yMid1}, ${36 - midWidth} ${yMid1}, ${36 - midWidth} ${yMid2}
+    C ${36 - midWidth} ${yMid3}, ${36 - topWidth} ${yMid4}, ${36 - topWidth} ${yTop}
+    Q 36 ${yTop - 4} ${36 + topWidth} ${yTop}
+    C ${36 + topWidth} ${yMid4}, ${36 + midWidth} ${yMid3}, ${36 + midWidth} ${yMid2}
+    C ${36 + midWidth} ${yMid1}, ${36 + baseFlare} ${yMid1}, ${36 + baseFlare} 150
+    Z`;
+  const barkShading = `
+    <path d="M ${36 - midWidth * 0.4} ${yMid1} C ${36 - midWidth * 0.5} ${yMid3}, ${36 - topWidth * 0.5} ${yMid4}, ${36 - topWidth * 0.3} ${yTop + 4}"
+      stroke="${shadeColor(trunkStyle.stops[1], -22)}" stroke-width="1" fill="none" opacity="0.35" stroke-linecap="round" />
+    <path d="M ${36 + midWidth * 0.3} ${yMid1} C ${36 + midWidth * 0.35} ${yMid3}, ${36 + topWidth * 0.35} ${yMid4}, ${36 + topWidth * 0.2} ${yTop + 4}"
+      stroke="${shadeColor(trunkStyle.stops[1], 15)}" stroke-width="0.8" fill="none" opacity="0.3" stroke-linecap="round" />`;
+
+  let trunkDecorations = "";
+  if (trunkStyle.decoration === "stripe") {
+    for (let s = 0; s < trunkStyle.count; s++) {
+      const xOff = (s + 1) / (trunkStyle.count + 1) - 0.5; // -0.5..0.5
+      const x = 36 + xOff * midWidth * 1.3;
+      trunkDecorations += `<path d="M ${x} ${150 - 6} Q ${x + midWidth * 0.15} ${yMid2} ${x} ${yTop + 5}"
+        stroke="#F2C94C" stroke-width="2" fill="none" opacity="0.85" stroke-linecap="round" />`;
+    }
+  } else if (trunkStyle.decoration === "star") {
+    const starGradId = trunkStyle.starGrad === "red" ? `red-${uid}` : `gold-${uid}`;
+    for (let s = 0; s < trunkStyle.count; s++) {
+      const t = (s + 1) / (trunkStyle.count + 1);
+      const sy = 150 - 6 - t * (150 - 6 - (yTop + 6));
+      trunkDecorations += `<g transform="translate(36 ${sy})">${sparkleShape(3.4, `url(#${starGradId})`, 1, "#FFF7E6", 0.4)}</g>`;
+    }
+  }
+  const trunkFilter = trunkStyle.glow ? `filter="url(#glow-${uid})"` : "";
+
   return `<svg width="72" height="160" viewBox="0 0 72 160" aria-hidden="true">
-    ${soil}
-    <path d="M 31 150 Q 34 ${150 - trunkHeight / 2} 36 ${150 - trunkHeight} Q 38 ${150 - trunkHeight / 2} 41 150 Z" fill="${accent}" opacity="0.9" />
-    <ellipse cx="36" cy="${150 - trunkHeight - 14}" rx="${canopyR + 6}" ry="${canopyR * 0.75}" fill="${accent}" opacity="0.16" />
-    <ellipse cx="36" cy="${150 - trunkHeight - 20}" rx="${canopyR}" ry="${canopyR * 0.7}" fill="${accent}" opacity="0.22" />
+    ${defs}${soil}
+    <path d="${trunkPath}" fill="url(#trunk-${uid})" ${trunkFilter} />
+    ${barkShading}
+    ${trunkDecorations}
     ${leaves}
     ${flourishes}
   </svg>`;
