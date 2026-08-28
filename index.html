@@ -167,6 +167,10 @@
 
         <div class="backup-row">
           <button id="export-btn" type="button">백업 내려받기</button>
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin-left:4px;">
+            <input type="checkbox" id="hide-leaderboard-toggle" style="cursor:pointer;" />
+            랭킹보드에서 내 이름 숨기기
+          </label>
         </div>
 
         <p id="error-msg" class="error-msg" style="display:none;"></p>
@@ -181,8 +185,8 @@
 
 <script>
 // ---------- ⚠️ 여기 두 값만 채워주세요 (Supabase 프로젝트 설정에서 복사) ----------
-const SUPABASE_URL = "https://axnehibmbilvbpkmgnrj.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4bmVoaWJtYmlsdmJwa21nbnJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc4NzY1OTgsImV4cCI6MjEwMzQ1MjU5OH0.5ALx1gASL0BqC3F1CEw8jTgJ0QMB8k02Ms9oMiehH24";
+const SUPABASE_URL = "YOUR_SUPABASE_URL";
+const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
 // -----------------------------------------------------------------------------
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -316,7 +320,7 @@ function getTrunkStyle(leavesEarned, accent) {
 
 function plantSVG(total, accent) {
   const uid = accent.replace("#", "") + "-" + total;
-  const leavesEarned = Math.floor(total / 3); // "나뭇잎 개수"
+  const leavesEarned = total; // "나뭇잎 개수" — 체크 1개당 나뭇잎 1개
   const trunkStyle = getTrunkStyle(leavesEarned, accent);
   const defs = `<defs>
     <radialGradient id="gold-${uid}" cx="35%" cy="30%" r="75%">
@@ -563,6 +567,30 @@ function exportHabits() {
   URL.revokeObjectURL(url);
 }
 
+// ---------- leaderboard visibility setting ----------
+async function loadMyProfileSetting() {
+  const { data, error } = await supabaseClient
+    .from("profiles")
+    .select("hide_from_leaderboard")
+    .eq("id", currentUser.id)
+    .maybeSingle();
+  const toggle = document.getElementById("hide-leaderboard-toggle");
+  if (!toggle) return;
+  if (error || !data) {
+    toggle.checked = false;
+    return;
+  }
+  toggle.checked = !!data.hide_from_leaderboard;
+}
+
+async function setHideFromLeaderboard(hide) {
+  const { error } = await supabaseClient
+    .from("profiles")
+    .update({ hide_from_leaderboard: hide })
+    .eq("id", currentUser.id);
+  if (error) showError("설정을 저장하지 못했어요: " + error.message);
+}
+
 // ---------- render ----------
 function render() {
   const content = document.getElementById("content");
@@ -658,6 +686,9 @@ document.getElementById("habit-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") addHabit();
 });
 document.getElementById("export-btn").addEventListener("click", exportHabits);
+document.getElementById("hide-leaderboard-toggle").addEventListener("change", (e) => {
+  setHideFromLeaderboard(e.target.checked);
+});
 
 document.getElementById("content").addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-action]");
@@ -687,13 +718,19 @@ document.getElementById("date-label").textContent =
 supabaseClient.auth.onAuthStateChange((_event, session) => {
   currentUser = session ? session.user : null;
   renderAuthArea();
-  if (currentUser) loadHabits();
+  if (currentUser) {
+    loadHabits();
+    loadMyProfileSetting();
+  }
 });
 
 supabaseClient.auth.getSession().then(({ data: { session } }) => {
   currentUser = session ? session.user : null;
   renderAuthArea();
-  if (currentUser) loadHabits();
+  if (currentUser) {
+    loadHabits();
+    loadMyProfileSetting();
+  }
 });
 </script>
 </body>
