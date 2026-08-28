@@ -181,8 +181,8 @@
 
 <script>
 // ---------- ⚠️ 여기 두 값만 채워주세요 (Supabase 프로젝트 설정에서 복사) ----------
-const SUPABASE_URL = "https://axnehibmbilvbpkmgnrj.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4bmVoaWJtYmlsdmJwa21nbnJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc4NzY1OTgsImV4cCI6MjEwMzQ1MjU5OH0.5ALx1gASL0BqC3F1CEw8jTgJ0QMB8k02Ms9oMiehH24";
+const SUPABASE_URL = "YOUR_SUPABASE_URL";
+const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
 // -----------------------------------------------------------------------------
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -226,35 +226,105 @@ function showError(msg) {
 }
 
 // ---------- plant visual ----------
-function plantSVG(total, accent) {
-  const stage = total === 0 ? 0 : total < 7 ? 1 : total < 30 ? 2 : total < 60 ? 3 : 4;
-  const stemHeight = Math.min(10 + total * 2.2, 130);
-  const leafCount = Math.min(Math.floor(total / 3), 30);
-  let leavesSVG = "";
-  for (let i = 0; i < leafCount; i++) {
-    const t = (i + 1) / (leafCount + 1);
-    const y = 148 - t * stemHeight;
-    const side = i % 2 === 0 ? 1 : -1;
-    const cx = 36 + side * 10;
-    const leafNumber = i + 1;
-    const isMilestone = leafNumber % 10 === 0;
-    const fill = isMilestone ? "#C1440E" : accent;
-    const opacity = isMilestone ? 0.95 : 0.75;
-    const stroke = isMilestone ? `stroke="#8C3009" stroke-width="0.75"` : "";
-    leavesSVG += `<ellipse cx="${cx}" cy="${y}" rx="9" ry="4.5" fill="${fill}" opacity="${opacity}" ${stroke} transform="rotate(${side*30} ${cx} ${y})" />`;
+function leafShape(leafNumber, cx, cy, rotate, accent) {
+  const isMilestone = leafNumber % 10 === 0;
+  const isFancy = !isMilestone && leafNumber % 5 === 0;
+  if (isMilestone) {
+    return `<g transform="rotate(${rotate} ${cx} ${cy})">
+      <ellipse cx="${cx}" cy="${cy}" rx="9.5" ry="5" fill="#C1440E" stroke="#8C3009" stroke-width="0.75" opacity="0.95" />
+    </g>`;
   }
-  let body;
-  if (stage === 0) {
-    body = `<circle cx="36" cy="146" r="3.5" fill="#B08968" />`;
-  } else {
-    const flower = stage >= 4
-      ? `<g transform="translate(36 ${150 - stemHeight})"><circle r="7" fill="#E0A458" /><circle r="3" fill="#F6F3EC" /></g>`
-      : "";
-    body = `<line x1="36" y1="150" x2="36" y2="${150 - stemHeight}" stroke="${accent}" stroke-width="3" stroke-linecap="round" />${leavesSVG}${flower}`;
+  if (isFancy) {
+    // small gold blossom instead of a plain leaf
+    return `<g transform="rotate(${rotate} ${cx} ${cy})">
+      <ellipse cx="${cx-3}" cy="${cy}" rx="5" ry="3.2" fill="#E0A458" opacity="0.9" />
+      <ellipse cx="${cx+3}" cy="${cy}" rx="5" ry="3.2" fill="#E0A458" opacity="0.9" />
+      <circle cx="${cx}" cy="${cy}" r="2.6" fill="#F6F3EC" />
+    </g>`;
+  }
+  return `<ellipse cx="${cx}" cy="${cy}" rx="9" ry="4.5" fill="${accent}" opacity="0.75" transform="rotate(${rotate} ${cx} ${cy})" />`;
+}
+
+function plantSVG(total, accent) {
+  const soil = `<ellipse cx="36" cy="152" rx="26" ry="6" fill="#B08968" opacity="0.35" />`;
+  const leavesEarned = Math.floor(total / 3); // "나뭇잎 개수"
+  if (leavesEarned === 0) {
+    return `<svg width="72" height="160" viewBox="0 0 72 160" aria-hidden="true">
+      ${soil}<circle cx="36" cy="146" r="3.5" fill="#B08968" /></svg>`;
+  }
+
+  const thicknessTier = Math.min(Math.floor(leavesEarned / 10), 6);
+  const trunkWidth = 3 + thicknessTier * 1.2; // thickens every 10 leaves
+  const rawTier = Math.floor(leavesEarned / 20); // evolves every 20 leaves
+  const shapeTier = Math.min(rawTier, 2); // 0 sapling, 1 young tree, 2 elegant tree
+  const stemHeight = Math.min(10 + total * 2.2, 130);
+
+  if (shapeTier === 0) {
+    const drawCount = leavesEarned;
+    let leaves = "";
+    for (let i = 0; i < drawCount; i++) {
+      const t = (i + 1) / (drawCount + 1);
+      const y = 148 - t * stemHeight;
+      const side = i % 2 === 0 ? 1 : -1;
+      leaves += leafShape(i + 1, 36 + side * 10, y, side * 30, accent);
+    }
+    return `<svg width="72" height="160" viewBox="0 0 72 160" aria-hidden="true">
+      ${soil}
+      <line x1="36" y1="150" x2="36" y2="${150 - stemHeight}" stroke="${accent}" stroke-width="${trunkWidth}" stroke-linecap="round" />
+      ${leaves}
+    </svg>`;
+  }
+
+  if (shapeTier === 1) {
+    const trunkHeight = 66;
+    const branchLen = 34;
+    const extra = leavesEarned - 20;
+    const drawCount = Math.min(extra, 18);
+    let leaves = "";
+    for (let i = 0; i < drawCount; i++) {
+      const left = i % 2 === 0;
+      const t = (Math.floor(i / 2) + 1) / (Math.ceil(drawCount / 2) + 1);
+      const bx = left ? 36 - 22 * t : 36 + 22 * t;
+      const by = (150 - trunkHeight) - branchLen * t * 0.7;
+      leaves += leafShape(21 + i, bx, by, left ? -25 : 25, accent);
+    }
+    return `<svg width="72" height="160" viewBox="0 0 72 160" aria-hidden="true">
+      ${soil}
+      <line x1="36" y1="150" x2="36" y2="${150 - trunkHeight}" stroke="${accent}" stroke-width="${trunkWidth}" stroke-linecap="round" />
+      <line x1="36" y1="${150 - trunkHeight}" x2="${36 - 22}" y2="${150 - trunkHeight - branchLen * 0.7}" stroke="${accent}" stroke-width="${trunkWidth * 0.65}" stroke-linecap="round" />
+      <line x1="36" y1="${150 - trunkHeight}" x2="${36 + 22}" y2="${150 - trunkHeight - branchLen * 0.7}" stroke="${accent}" stroke-width="${trunkWidth * 0.65}" stroke-linecap="round" />
+      ${leaves}
+    </svg>`;
+  }
+
+  // shapeTier === 2: elegant, fuller tree — keeps getting a bit richer every 20 leaves beyond this
+  const luxuryLevel = rawTier - 1; // 0 at the threshold, grows further afterward
+  const trunkHeight = 58;
+  const canopyR = 24 + Math.min(luxuryLevel, 4) * 2;
+  const drawCount = Math.min(leavesEarned - 40, 20);
+  const flourishCount = 1 + Math.min(luxuryLevel, 4);
+  let leaves = "";
+  for (let i = 0; i < Math.max(drawCount, 0); i++) {
+    const angle = (i / Math.max(drawCount, 1)) * Math.PI * 2;
+    const r = 15 + (i % 3) * 4;
+    const cx = 36 + Math.cos(angle) * r;
+    const cy = (150 - trunkHeight - 18) + Math.sin(angle) * r * 0.55;
+    leaves += leafShape(41 + i, cx, cy, (i * 40) % 360, accent);
+  }
+  let flourishes = "";
+  for (let f = 0; f < flourishCount; f++) {
+    const fa = (f / flourishCount) * Math.PI * 2;
+    const fx = 36 + Math.cos(fa) * (canopyR - 6);
+    const fy = (150 - trunkHeight - 20) + Math.sin(fa) * (canopyR - 6) * 0.5;
+    flourishes += `<g transform="translate(${fx} ${fy})"><circle r="4.5" fill="#E0A458" /><circle r="1.8" fill="#F6F3EC" /></g>`;
   }
   return `<svg width="72" height="160" viewBox="0 0 72 160" aria-hidden="true">
-    <ellipse cx="36" cy="152" rx="26" ry="6" fill="#B08968" opacity="0.35" />
-    ${body}
+    ${soil}
+    <path d="M 31 150 Q 34 ${150 - trunkHeight / 2} 36 ${150 - trunkHeight} Q 38 ${150 - trunkHeight / 2} 41 150 Z" fill="${accent}" opacity="0.9" />
+    <ellipse cx="36" cy="${150 - trunkHeight - 14}" rx="${canopyR + 6}" ry="${canopyR * 0.75}" fill="${accent}" opacity="0.16" />
+    <ellipse cx="36" cy="${150 - trunkHeight - 20}" rx="${canopyR}" ry="${canopyR * 0.7}" fill="${accent}" opacity="0.22" />
+    ${leaves}
+    ${flourishes}
   </svg>`;
 }
 
