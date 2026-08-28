@@ -126,20 +126,25 @@
   }
   .tab-btn.active { background: #5B8C5A; border-color: #5B8C5A; color: #fff; }
 
-  .leaderboard-list { display: flex; flex-direction: column; gap: 8px; }
-  .lb-row {
-    display: flex; align-items: center; gap: 12px;
-    background: #fff; border: 1px solid #E5E8DE; border-radius: 12px;
-    padding: 12px 16px;
+  .leaderboard-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 16px;
   }
-  .lb-row.me { border-color: #5B8C5A; background: #F4F8F3; }
-  .lb-rank {
-    font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 14px;
-    color: #7C9885; width: 28px; text-align: center; flex-shrink: 0;
+  .lb-card {
+    position: relative; background: #fff; border: 1px solid #E5E8DE;
+    border-radius: 16px; padding: 16px 12px 14px; display: flex;
+    flex-direction: column; align-items: center; text-align: center;
+    box-shadow: 0 1px 2px rgba(38,50,40,0.04);
   }
-  .lb-name { flex: 1; font-weight: 600; font-size: 14px; }
+  .lb-card.me { border-color: #5B8C5A; background: #F4F8F3; }
+  .lb-rank-badge {
+    position: absolute; top: 8px; left: 10px;
+    font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 13px;
+    color: #7C9885;
+  }
+  .lb-name { font-weight: 600; font-size: 14px; margin: 2px 0 2px; }
   .lb-leaves {
-    font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #5B8C5A;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #5B8C5A;
     font-weight: 600;
   }
 
@@ -248,8 +253,8 @@
 
 <script>
 // ---------- ⚠️ 여기 두 값만 채워주세요 (Supabase 프로젝트 설정에서 복사) ----------
-const SUPABASE_URL = "https://axnehibmbilvbpkmgnrj.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4bmVoaWJtYmlsdmJwa21nbnJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc4NzY1OTgsImV4cCI6MjEwMzQ1MjU5OH0.5ALx1gASL0BqC3F1CEw8jTgJ0QMB8k02Ms9oMiehH24";
+const SUPABASE_URL = "YOUR_SUPABASE_URL";
+const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
 // -----------------------------------------------------------------------------
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -749,6 +754,12 @@ function render() {
 }
 
 // ---------- leaderboard ----------
+function hashToColor(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+  return PALETTE[hash % PALETTE.length];
+}
+
 async function loadLeaderboard() {
   const el = document.getElementById("leaderboard-content");
   el.innerHTML = `<p style="color:#7C9885;">불러오는 중…</p>`;
@@ -766,13 +777,15 @@ async function loadLeaderboard() {
     return;
   }
   const medals = ["🥇", "🥈", "🥉"];
-  el.innerHTML = `<div class="leaderboard-list">${data.map((row, i) => {
+  el.innerHTML = `<div class="leaderboard-grid">${data.map((row, i) => {
     const isMe = currentUser && row.user_id === currentUser.id;
+    const color = hashToColor(row.user_id);
     return `
-      <div class="lb-row ${isMe ? "me" : ""}">
-        <div class="lb-rank">${medals[i] || i + 1}</div>
-        <div class="lb-name">${escapeHTML(row.display_name)}${isMe ? " (나)" : ""}</div>
-        <div class="lb-leaves">🌿 ${row.total_leaves}</div>
+      <div class="lb-card ${isMe ? "me" : ""}">
+        <div class="lb-rank-badge">${medals[i] || "#" + (i + 1)}</div>
+        ${plantSVG(row.total_leaves, color)}
+        <p class="lb-name">${escapeHTML(row.display_name)}${isMe ? " (나)" : ""}</p>
+        <p class="lb-leaves">🌿 ${row.total_leaves}</p>
       </div>`;
   }).join("")}</div>`;
 }
