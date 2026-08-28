@@ -209,6 +209,7 @@
       <div class="tab-row">
         <button class="tab-btn active" id="tab-garden" type="button">내 정원</button>
         <button class="tab-btn" id="tab-leaderboard" type="button">랭킹보드</button>
+        <button class="tab-btn" id="tab-calendar" type="button">달력</button>
         <button class="tab-btn" id="tab-admin" type="button" style="display:none;">관리자</button>
       </div>
 
@@ -234,6 +235,11 @@
         <div id="leaderboard-content"></div>
       </div>
 
+      <div id="calendar-tab-view" style="display:none;">
+        <div id="calendar-tab-selector" style="margin-bottom:12px;"></div>
+        <div id="calendar-tab-content"></div>
+      </div>
+
       <div id="admin-view" style="display:none;">
         <div id="admin-content"></div>
       </div>
@@ -242,8 +248,8 @@
 
 <script>
 // ---------- ⚠️ 여기 두 값만 채워주세요 (Supabase 프로젝트 설정에서 복사) ----------
-const SUPABASE_URL = "https://axnehibmbilvbpkmgnrj.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4bmVoaWJtYmlsdmJwa21nbnJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc4NzY1OTgsImV4cCI6MjEwMzQ1MjU5OH0.5ALx1gASL0BqC3F1CEw8jTgJ0QMB8k02Ms9oMiehH24";
+const SUPABASE_URL = "YOUR_SUPABASE_URL";
+const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
 // -----------------------------------------------------------------------------
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -664,9 +670,7 @@ function firstWeekday(year, month) {
   return new Date(year, month, 1).getDay();
 }
 
-function calendarPanelHTML(habit) {
-  const year = calendarViewYear;
-  const month = calendarViewMonth;
+function calendarPanelHTML(habit, year, month) {
   const totalDays = daysInMonth(year, month);
   const startWeekday = firstWeekday(year, month);
   const today = todayStr();
@@ -741,7 +745,7 @@ function render() {
         <button class="del-btn" data-action="delete" data-id="${h.id}">삭제</button>
       </div>`;
   }).join("")}</div>
-  ${openHabit ? calendarPanelHTML(openHabit) : ""}`;
+  ${openHabit ? calendarPanelHTML(openHabit, calendarViewYear, calendarViewMonth) : ""}`;
 }
 
 // ---------- leaderboard ----------
@@ -776,19 +780,74 @@ async function loadLeaderboard() {
 function switchTab(tab) {
   const gardenBtn = document.getElementById("tab-garden");
   const lbBtn = document.getElementById("tab-leaderboard");
+  const calBtn = document.getElementById("tab-calendar");
   const adminBtn = document.getElementById("tab-admin");
   const gardenView = document.getElementById("garden-view");
   const lbView = document.getElementById("leaderboard-view");
+  const calView = document.getElementById("calendar-tab-view");
   const adminView = document.getElementById("admin-view");
   gardenBtn.classList.toggle("active", tab === "garden");
   lbBtn.classList.toggle("active", tab === "leaderboard");
+  calBtn.classList.toggle("active", tab === "calendar");
   adminBtn.classList.toggle("active", tab === "admin");
   gardenView.style.display = tab === "garden" ? "" : "none";
   lbView.style.display = tab === "leaderboard" ? "" : "none";
+  calView.style.display = tab === "calendar" ? "" : "none";
   adminView.style.display = tab === "admin" ? "" : "none";
   if (tab === "leaderboard") loadLeaderboard();
+  if (tab === "calendar") renderCalendarTab();
   if (tab === "admin") loadAdminList();
 }
+
+// ---------- dedicated calendar tab ----------
+let tabCalHabitId = null;
+let tabCalYear = new Date().getFullYear();
+let tabCalMonth = new Date().getMonth();
+
+function renderCalendarTab() {
+  const selectorEl = document.getElementById("calendar-tab-selector");
+  const contentEl = document.getElementById("calendar-tab-content");
+
+  if (habits.length === 0) {
+    selectorEl.innerHTML = "";
+    contentEl.innerHTML = `
+      <div class="empty">
+        <p>아직 심은 습관이 없어요</p>
+        <p style="font-size:14px;">정원 탭에서 습관을 먼저 심어보세요.</p>
+      </div>`;
+    return;
+  }
+
+  if (!tabCalHabitId || !habits.find(h => h.id === tabCalHabitId)) {
+    tabCalHabitId = habits[0].id;
+  }
+
+  selectorEl.innerHTML = `<div class="profile-list">${habits.map(h => `
+    <button class="profile-chip" data-action="select-cal-habit" data-id="${h.id}"
+      style="border-color:${h.color}; background:${h.id === tabCalHabitId ? h.color : "#F4F6F1"}; color:${h.id === tabCalHabitId ? "#fff" : "#263228"};">
+      ${escapeHTML(h.name)}
+    </button>`).join("")}</div>`;
+
+  const habit = habits.find(h => h.id === tabCalHabitId);
+  contentEl.innerHTML = calendarPanelHTML(habit, tabCalYear, tabCalMonth);
+}
+
+document.getElementById("calendar-tab-selector").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-action='select-cal-habit']");
+  if (!btn) return;
+  tabCalHabitId = btn.dataset.id;
+  renderCalendarTab();
+});
+
+document.getElementById("calendar-tab-content").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-action='cal-nav']");
+  if (!btn) return;
+  const delta = parseInt(btn.dataset.delta, 10);
+  tabCalMonth += delta;
+  if (tabCalMonth < 0) { tabCalMonth = 11; tabCalYear -= 1; }
+  if (tabCalMonth > 11) { tabCalMonth = 0; tabCalYear += 1; }
+  renderCalendarTab();
+});
 
 // ---------- admin panel ----------
 async function loadAdminList() {
@@ -837,6 +896,7 @@ document.getElementById("admin-content").addEventListener("click", (e) => {
 
 document.getElementById("tab-garden").addEventListener("click", () => switchTab("garden"));
 document.getElementById("tab-leaderboard").addEventListener("click", () => switchTab("leaderboard"));
+document.getElementById("tab-calendar").addEventListener("click", () => switchTab("calendar"));
 document.getElementById("tab-admin").addEventListener("click", () => switchTab("admin"));
 
 document.getElementById("add-btn").addEventListener("click", addHabit);
