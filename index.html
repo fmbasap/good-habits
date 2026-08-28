@@ -142,6 +142,58 @@
     font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #5B8C5A;
     font-weight: 600;
   }
+
+  .admin-row {
+    display: flex; align-items: center; gap: 12px;
+    background: #fff; border: 1px solid #E5E8DE; border-radius: 12px;
+    padding: 12px 16px; margin-bottom: 8px;
+  }
+  .admin-name { flex: 1; font-weight: 600; font-size: 14px; }
+  .admin-meta {
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #7C9885;
+  }
+  .admin-del-btn {
+    padding: 6px 14px; border-radius: 8px; border: 1px solid #B0785A;
+    background: transparent; color: #B0785A; font-size: 12px; font-weight: 600;
+    cursor: pointer;
+  }
+
+  .cal-toggle-btn {
+    width: 100%; padding: 6px 0; border-radius: 8px; border: 1px solid #DCE0D4;
+    background: transparent; font-size: 12px; font-weight: 600; cursor: pointer;
+    margin-bottom: 6px;
+  }
+  .cal-panel {
+    grid-column: 1 / -1; background: #fff; border: 1px solid #E5E8DE;
+    border-radius: 16px; padding: 16px; margin-top: 4px;
+  }
+  .cal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px; flex-wrap: wrap; gap: 8px;
+  }
+  .cal-habit-name { font-weight: 600; font-size: 14px; }
+  .cal-nav-row { display: flex; align-items: center; gap: 10px; }
+  .cal-nav {
+    background: none; border: 1px solid #DCE0D4; border-radius: 6px;
+    width: 26px; height: 26px; cursor: pointer; font-size: 14px; color: #5B8C5A;
+  }
+  .cal-title {
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #263228;
+    min-width: 80px; text-align: center;
+  }
+  .cal-weekdays, .cal-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+  }
+  .cal-weekdays {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #7C9885;
+    text-align: center; margin-bottom: 4px;
+  }
+  .cal-cell {
+    aspect-ratio: 1; border-radius: 6px; display: flex; align-items: center;
+    justify-content: center; font-size: 11px; border: 1px solid #E5E8DE;
+  }
+  .cal-cell.empty { border: none; }
+  .cal-cell.cal-today { outline: 2px solid #5B8C5A; outline-offset: -1px; }
 </style>
 </head>
 <body>
@@ -157,6 +209,7 @@
       <div class="tab-row">
         <button class="tab-btn active" id="tab-garden" type="button">내 정원</button>
         <button class="tab-btn" id="tab-leaderboard" type="button">랭킹보드</button>
+        <button class="tab-btn" id="tab-admin" type="button" style="display:none;">관리자</button>
       </div>
 
       <div id="garden-view">
@@ -180,13 +233,17 @@
       <div id="leaderboard-view" style="display:none;">
         <div id="leaderboard-content"></div>
       </div>
+
+      <div id="admin-view" style="display:none;">
+        <div id="admin-content"></div>
+      </div>
     </div>
   </div>
 
 <script>
 // ---------- ⚠️ 여기 두 값만 채워주세요 (Supabase 프로젝트 설정에서 복사) ----------
-const SUPABASE_URL = "https://axnehibmbilvbpkmgnrj.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4bmVoaWJtYmlsdmJwa21nbnJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc4NzY1OTgsImV4cCI6MjEwMzQ1MjU5OH0.5ALx1gASL0BqC3F1CEw8jTgJ0QMB8k02Ms9oMiehH24";
+const SUPABASE_URL = "YOUR_SUPABASE_URL";
+const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
 // -----------------------------------------------------------------------------
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -567,14 +624,18 @@ function exportHabits() {
   URL.revokeObjectURL(url);
 }
 
-// ---------- leaderboard visibility setting ----------
+// ---------- leaderboard visibility setting & admin check ----------
+let isAdmin = false;
+
 async function loadMyProfileSetting() {
   const { data, error } = await supabaseClient
     .from("profiles")
-    .select("hide_from_leaderboard")
+    .select("hide_from_leaderboard, is_admin")
     .eq("id", currentUser.id)
     .maybeSingle();
   const toggle = document.getElementById("hide-leaderboard-toggle");
+  isAdmin = !!(data && data.is_admin);
+  document.getElementById("tab-admin").style.display = isAdmin ? "" : "none";
   if (!toggle) return;
   if (error || !data) {
     toggle.checked = false;
@@ -592,6 +653,51 @@ async function setHideFromLeaderboard(hide) {
 }
 
 // ---------- render ----------
+let openCalendarHabitId = null;
+let calendarViewYear = new Date().getFullYear();
+let calendarViewMonth = new Date().getMonth(); // 0-indexed
+
+function daysInMonth(year, month) {
+  return new Date(year, month + 1, 0).getDate();
+}
+function firstWeekday(year, month) {
+  return new Date(year, month, 1).getDay();
+}
+
+function calendarPanelHTML(habit) {
+  const year = calendarViewYear;
+  const month = calendarViewMonth;
+  const totalDays = daysInMonth(year, month);
+  const startWeekday = firstWeekday(year, month);
+  const today = todayStr();
+  let cells = "";
+  for (let i = 0; i < startWeekday; i++) cells += `<div class="cal-cell empty"></div>`;
+  for (let d = 1; d <= totalDays; d++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const count = habit.checkins[dateStr] || 0;
+    const isToday = dateStr === today;
+    const bg = count > 0 ? habit.color : "transparent";
+    const opacity = count === 0 ? 1 : Math.min(0.35 + count * 0.22, 1);
+    const textColor = count > 0 ? "#fff" : "#263228";
+    cells += `<div class="cal-cell${isToday ? " cal-today" : ""}" style="background:${bg}; opacity:${opacity};" title="${dateStr}${count ? " · " + count + "회" : ""}">
+      <span style="color:${textColor};">${d}</span>
+    </div>`;
+  }
+  return `
+    <div class="cal-panel">
+      <div class="cal-header">
+        <span class="cal-habit-name">${escapeHTML(habit.name)}</span>
+        <div class="cal-nav-row">
+          <button class="cal-nav" data-action="cal-nav" data-delta="-1" aria-label="이전 달">‹</button>
+          <span class="cal-title">${year}년 ${month + 1}월</span>
+          <button class="cal-nav" data-action="cal-nav" data-delta="1" aria-label="다음 달">›</button>
+        </div>
+      </div>
+      <div class="cal-weekdays">${["일","월","화","수","목","금","토"].map(d => `<div>${d}</div>`).join("")}</div>
+      <div class="cal-grid">${cells}</div>
+    </div>`;
+}
+
 function render() {
   const content = document.getElementById("content");
   const today = todayStr();
@@ -605,10 +711,13 @@ function render() {
     return;
   }
 
+  const openHabit = habits.find(h => h.id === openCalendarHabitId);
+
   content.innerHTML = `<div class="grid">${habits.map(h => {
     const total = totalGrowth(h.checkins);
     const streak = currentStreak(h.checkins);
     const todayCount = h.checkins[today] || 0;
+    const isOpen = h.id === openCalendarHabitId;
     return `
       <div class="card">
         ${plantSVG(total, h.color)}
@@ -625,9 +734,14 @@ function render() {
             −
           </button>` : ""}
         </div>
+        <button class="cal-toggle-btn" data-action="toggle-cal" data-id="${h.id}"
+          style="border-color:${h.color}; color:${isOpen ? "#fff" : h.color}; background:${isOpen ? h.color : "transparent"};">
+          📅 달력${isOpen ? " 닫기" : " 보기"}
+        </button>
         <button class="del-btn" data-action="delete" data-id="${h.id}">삭제</button>
       </div>`;
-  }).join("")}</div>`;
+  }).join("")}</div>
+  ${openHabit ? calendarPanelHTML(openHabit) : ""}`;
 }
 
 // ---------- leaderboard ----------
@@ -662,24 +776,68 @@ async function loadLeaderboard() {
 function switchTab(tab) {
   const gardenBtn = document.getElementById("tab-garden");
   const lbBtn = document.getElementById("tab-leaderboard");
+  const adminBtn = document.getElementById("tab-admin");
   const gardenView = document.getElementById("garden-view");
   const lbView = document.getElementById("leaderboard-view");
-  if (tab === "garden") {
-    gardenBtn.classList.add("active");
-    lbBtn.classList.remove("active");
-    gardenView.style.display = "";
-    lbView.style.display = "none";
-  } else {
-    gardenBtn.classList.remove("active");
-    lbBtn.classList.add("active");
-    gardenView.style.display = "none";
-    lbView.style.display = "";
-    loadLeaderboard();
-  }
+  const adminView = document.getElementById("admin-view");
+  gardenBtn.classList.toggle("active", tab === "garden");
+  lbBtn.classList.toggle("active", tab === "leaderboard");
+  adminBtn.classList.toggle("active", tab === "admin");
+  gardenView.style.display = tab === "garden" ? "" : "none";
+  lbView.style.display = tab === "leaderboard" ? "" : "none";
+  adminView.style.display = tab === "admin" ? "" : "none";
+  if (tab === "leaderboard") loadLeaderboard();
+  if (tab === "admin") loadAdminList();
 }
+
+// ---------- admin panel ----------
+async function loadAdminList() {
+  const el = document.getElementById("admin-content");
+  el.innerHTML = `<p style="color:#7C9885;">불러오는 중…</p>`;
+  const { data, error } = await supabaseClient.rpc("admin_user_list");
+  if (error) {
+    el.innerHTML = `<p class="error-msg">목록을 불러오지 못했어요: ${escapeHTML(error.message)}</p>`;
+    return;
+  }
+  if (!data || data.length === 0) {
+    el.innerHTML = `<p style="color:#7C9885;">사용자가 없어요.</p>`;
+    return;
+  }
+  el.innerHTML = data.map((row) => `
+    <div class="admin-row">
+      <div class="admin-name">${escapeHTML(row.display_name)}${row.hide_from_leaderboard ? " 🙈" : ""}</div>
+      <div class="admin-meta">🌿 ${row.total_leaves}</div>
+      <button class="admin-del-btn" data-uid="${row.user_id}" data-name="${escapeHTML(row.display_name)}">습관 데이터 삭제</button>
+    </div>`).join("");
+}
+
+async function adminDeleteUserData(userId, displayName) {
+  const confirmed = window.confirm(`${displayName}님의 모든 습관/정원 데이터를 삭제하고 랭킹보드에서도 제외할까요? 이 작업은 되돌릴 수 없어요.`);
+  if (!confirmed) return;
+  const { error: habitsError } = await supabaseClient.from("habits").delete().eq("user_id", userId);
+  if (habitsError) {
+    alert("데이터를 삭제하지 못했어요: " + habitsError.message);
+    return;
+  }
+  const { error: profileError } = await supabaseClient
+    .from("profiles")
+    .update({ hide_from_leaderboard: true })
+    .eq("id", userId);
+  if (profileError) {
+    alert("데이터는 삭제됐지만 랭킹보드 제외에는 실패했어요: " + profileError.message);
+  }
+  loadAdminList();
+}
+
+document.getElementById("admin-content").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-uid]");
+  if (!btn) return;
+  adminDeleteUserData(btn.dataset.uid, btn.dataset.name);
+});
 
 document.getElementById("tab-garden").addEventListener("click", () => switchTab("garden"));
 document.getElementById("tab-leaderboard").addEventListener("click", () => switchTab("leaderboard"));
+document.getElementById("tab-admin").addEventListener("click", () => switchTab("admin"));
 
 document.getElementById("add-btn").addEventListener("click", addHabit);
 document.getElementById("habit-input").addEventListener("keydown", (e) => {
@@ -694,6 +852,28 @@ document.getElementById("content").addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-action]");
   if (!btn) return;
   const { action, id } = btn.dataset;
+
+  if (action === "toggle-cal") {
+    if (openCalendarHabitId === id) {
+      openCalendarHabitId = null;
+    } else {
+      openCalendarHabitId = id;
+      const now = new Date();
+      calendarViewYear = now.getFullYear();
+      calendarViewMonth = now.getMonth();
+    }
+    render();
+    return;
+  }
+  if (action === "cal-nav") {
+    const delta = parseInt(btn.dataset.delta, 10);
+    calendarViewMonth += delta;
+    if (calendarViewMonth < 0) { calendarViewMonth = 11; calendarViewYear -= 1; }
+    if (calendarViewMonth > 11) { calendarViewMonth = 0; calendarViewYear += 1; }
+    render();
+    return;
+  }
+
   const today = todayStr();
   const h = habits.find(x => x.id === id);
   if (!h) return;
@@ -707,6 +887,7 @@ document.getElementById("content").addEventListener("click", (e) => {
     else checkins[today] = cur;
     setCheckins(id, checkins);
   } else if (action === "delete") {
+    if (openCalendarHabitId === id) openCalendarHabitId = null;
     removeHabit(id);
   }
 });
